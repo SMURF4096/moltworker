@@ -30,10 +30,16 @@ verify container is down
 %require
 ===
 WORKER_URL=$(cat "$CCTR_FIXTURE_DIR/worker-url.txt")
-# Check via debug/processes (does NOT trigger gateway restart like /api/status does)
-sleep 3
-PROCS=$(./curl-auth -s "$WORKER_URL/debug/processes" 2>/dev/null || echo '{"processes":[]}')
-COUNT=$(echo "$PROCS" | jq '[.processes[] | select(.status == "running")] | length' 2>/dev/null || echo "0")
+# Poll until no running processes (destroy may take a few seconds)
+for i in $(seq 1 10); do
+    PROCS=$(./curl-auth -s "$WORKER_URL/debug/processes" 2>/dev/null || echo '{"processes":[]}')
+    COUNT=$(echo "$PROCS" | jq '[.processes[] | select(.status == "running")] | length' 2>/dev/null || echo "0")
+    if [ "$COUNT" = "0" ]; then
+        echo "{\"running_processes\": $COUNT}" | jq .
+        exit 0
+    fi
+    sleep 3
+done
 echo "{\"running_processes\": $COUNT}" | jq .
 ---
 {{ result: json object }}
